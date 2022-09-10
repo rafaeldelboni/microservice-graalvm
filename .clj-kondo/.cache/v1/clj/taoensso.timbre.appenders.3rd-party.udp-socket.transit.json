@@ -1,0 +1,1 @@
+["^ ","~$udp-appender",["^ ","~:row",5,"~:col",1,"~:fixed-arities",["~#set",[1]],"~:name","^0","~:ns","~$taoensso.timbre.appenders.3rd-party.udp-socket","~:top-ns","^7"],"~:filename","/home/delboni/.m2/repository/com/taoensso/timbre/5.2.1/timbre-5.2.1.jar:taoensso/timbre/appenders/3rd_party/udp_socket.clj"]

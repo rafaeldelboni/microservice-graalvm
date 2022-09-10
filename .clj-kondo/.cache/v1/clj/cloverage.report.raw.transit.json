@@ -1,0 +1,1 @@
+["^ ","~$report",["^ ","~:row",6,"~:col",1,"~:fixed-arities",["~#set",[3]],"~:name","^0","~:ns","~$cloverage.report.raw","~:top-ns","^7","~:arities",["^ ","~i3",["^ ","~:args",["~#list",["~:nilable/string",null,null]],"~:arglist-str","[out-dir stats covered]"]]],"~:filename","/home/delboni/.m2/repository/cloverage/cloverage/1.2.0/cloverage-1.2.0.jar:cloverage/report/raw.clj"]
