@@ -1,1 +1,0 @@
-["^ ","~$-getMDCA",["^ ","~:row",8,"~:col",1,"~:fixed-arities",["~#set",[1]],"~:name","^0","~:ns","~$slf4j-timbre.static-mdc-binder","~:top-ns","^7"],"~$-getMDCAdapterClassStr",["^ ","^1",12,"^2",1,"^3",["^4",[1]],"^5","^9","^6","^7","^8","^7"],"~:filename","/home/delboni/.m2/repository/com/fzakaria/slf4j-timbre/0.3.21/slf4j-timbre-0.3.21.jar:slf4j_timbre/static_mdc_binder.clj"]
