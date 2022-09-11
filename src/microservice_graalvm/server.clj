@@ -1,12 +1,14 @@
 (ns microservice-graalvm.server
-  (:require [cheshire.core :as json]
+  (:require [aero.core :as aero]
+            [cheshire.core :as json]
+            [clojure.java.io :as io]
             [clojure.string :as string]
             [exoscale.interceptor :as ix]
             [java-http-clj.core :as http]
-            [org.httpkit.server :as http-kit]
-            [ruuter.core :as ruuter]
             [next.jdbc :as jdbc]
             [next.jdbc.connection :as connection]
+            [org.httpkit.server :as http-kit]
+            [ruuter.core :as ruuter]
             [taoensso.timbre :as timbre])
   (:import [com.zaxxer.hikari HikariDataSource])
   (:gen-class))
@@ -14,11 +16,10 @@
 (set! *warn-on-reflection* true)
 
 (defn db-query []
-  (let [db-spec {:dbtype "postgres"
-                 :dbname "postgres"
-                 :username "postgres"
-                 :password "postgres"}]
-    (with-open [^HikariDataSource ds (connection/->pool HikariDataSource db-spec)]
+  (let [config (-> (io/resource "config.edn")
+                   (aero/read-config {:profile :dev})
+                   :database)]
+    (with-open [^HikariDataSource ds (connection/->pool HikariDataSource config)]
       (.close (jdbc/get-connection ds))
       (-> ds
           (jdbc/execute! ["SELECT * FROM pg_catalog.pg_tables WHERE tablename = 'pg_index';"])

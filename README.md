@@ -7,12 +7,13 @@ Clojure Microservice Boilerplate: http-kit, java-http-clj, ruuter, interceptor, 
 
 - [x] Using http-kit/ruuters
 - [x] Add interceptor into the stack 
-- [x] Add create before interceptor that coerce/convert request parameters (path & body)
-- [x] Add create after interceptor that coerce/convert response body
+- [x] Create interceptor that coerce/convert request parameters (path & body)
+- [x] Create interceptor that coerce/convert response body
 - [x] Do a http request using http-client (parse request/response)
 - [x] Add PostgreSQL call
-- [ ] Add create after interceptor that validate response body
-- [ ] Add create before interceptor that validate request parameters (path & body)
+- [x] Add Aero config read
+- [ ] Create interceptor that validate response body
+- [ ] Create interceptor that validate request parameters (path & body)
 - [x] Compile using GraalVM
 
 ## Features
@@ -29,7 +30,7 @@ Clojure Microservice Boilerplate: http-kit, java-http-clj, ruuter, interceptor, 
 - [timbre](https://github.com/ptaoussanis/timbre) Logging library
 - [next-jdbc](https://github.com/seancorfield/next-jdbc) JDBC-based layer to access databases
 - [honeysql](https://github.com/seancorfield/honeysql) SQL as Clojure data structures
-- [depstar](https://github.com/seancorfield/depstar) Generates Uberjars for releases
+- [build-clj](https://github.com/seancorfield/build-clj) Common build tasks abstracted into a library
 
 ### Tests & Checks
 - [kaocha](https://github.com/lambdaisland/kaocha) Test runner
@@ -39,27 +40,6 @@ Clojure Microservice Boilerplate: http-kit, java-http-clj, ruuter, interceptor, 
 - [matcher-combinators](https://github.com/nubank/matcher-combinators) Assertions in data structures
 - [pg-embedded-clj](https://github.com/Bigsy/pg-embedded-clj) Embedded PostgreSQL for integration tests
 - [clojure-lsp](https://github.com/clojure-lsp/clojure-lsp/) Code Format, Namespace Check and Diagnosis
-
-## Directory Structure
-```
-./
-├── .clj-kondo -- clj-kondo configuration and classes
-├── .github
-│   └── workflows -- Github workflows folder.
-├── docker -- docker and docker-compose files for the database
-├── resources -- Application resources assets folder and configuration files.
-│   └── migrations -- Current database schemas, synced on service startup.
-├── src -- Library source code and headers.
-│   ├── parenthesin -- Source for common utilities and helpers.
-│   └── microservice_graalvm -- Source for the service example (wallet).
-└── test -- Test source code.
-    ├── integration -- Integration tests source (uses state-flow).
-    │   ├── parenthesin -- Tests for common utilities and helpers.
-    │   └── microservice_graalvm -- Tests for service example (wallet).
-    └── unit -- Unity tests source (uses clojure.test).
-        ├── parenthesin -- Tests for common utilities.
-        └── microservice_graalvm -- Tests for service example (wallet).
-```
 
 ## Related
 
