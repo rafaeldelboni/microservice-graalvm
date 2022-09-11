@@ -1,31 +1,33 @@
 (ns microservice-graalvm.server
-  (:require [org.httpkit.server :as http-kit]
+  (:require [cheshire.core :as json]
+            [clojure.string :as string]
             [exoscale.interceptor :as ix]
-            [cheshire.core :as json]
+            [java-http-clj.core :as http]
+            [org.httpkit.server :as http-kit]
             [ruuter.core :as ruuter])
   (:gen-class))
 
-(def interceptor-parse-request-body
+(def parse-request-body
   {:name :parse-request-body
    :enter
-   (-> (fn [ctx] (assoc-in ctx
-                           [:params :body]
-                           (-> ctx :body slurp (json/decode true))))
-       (ix/when #(and (= (-> % :body type)
-                         java.io.ByteArrayInputStream)
-                      (= (:content-type %)
-                         "application/json"))))
-   :error (fn [ctx _err] ctx)})
+   (-> (fn [ctx] (assoc ctx :body
+                        (-> ctx :body slurp (json/decode true))))
+       (ix/when #(and (= (-> % :body type) java.io.ByteArrayInputStream)
+                      (= (:content-type %) "application/json"))))
+   :error (fn [_ctx err] {:status 500 :body (str err)})})
 
-(def interceptor-B {:name :B
-                    :enter (fn [ctx] (update ctx :b inc))
-                    :error (fn [ctx _err] ctx)})
+(def parse-response-body
+  {:name :parse-response-body
+   :enter (-> (fn [ctx] (-> ctx
+                            (assoc :content-type "application/json")
+                            (assoc :body (-> ctx :body (json/encode true)))))
+              (ix/when #(and (= (-> % :body type) clojure.lang.PersistentArrayMap)
+                             (or (string/blank? (:content-type %))
+                                 (= (:content-type %) "application/json")))))
+   :error (fn [_ctx err] {:status 500 :body (str err)})})
 
-(def interceptor-D {:name :D
-                    :enter (fn [ctx] (update ctx :d inc))})
-
-(def base-interceptors {:before [interceptor-parse-request-body interceptor-B]
-                        :after [interceptor-D]})
+(def base-interceptors {:before [parse-request-body]
+                        :after [parse-response-body]})
 
 (defn ps "Process route response"
   [{:keys [response-fn interceptors]}]
@@ -37,34 +39,46 @@
                           :error (fn [_ctx err] {:status 500 :body (str err)})
                           :enter (-> response-fn
                                      (ix/in [])
-                                     (ix/out [:response]))
-                          :leave (fn [ctx] (-> ctx
-                                               (merge (:response ctx))
-                                               (dissoc :response
-                                                       :interceptors)))}]
+                                     (ix/out [:response]))}
+                         {:name :response-fn-after
+                          :error (fn [_ctx err] {:status 500 :body (str err)})
+                          :enter (fn [ctx]
+                                   (-> ctx
+                                       (merge (:response ctx))
+                                       (dissoc :response
+                                               :interceptors)))}]
                         (-> req :interceptors :after)))))
 
 (def routes
   [{:path "/"
     :method :get
-    :response (ps {:response-fn (fn [ctx]
-                                  {:status 200
-                                   :body (str "Hi there!!!! " ctx)})
+    :response (ps {:response-fn (fn [_ctx]
+                                  (let [price (-> {:uri "https://api.coindesk.com/v1/bpi/currentprice.json" :method :get}
+                                                  (http/send {})
+                                                  :body
+                                                  (json/decode true)
+                                                  :bpi
+                                                  :USD
+                                                  :rate)]
+                                    {:status 200
+                                     :body (str "Hi there!!!! The current price is " price)}))
                    :interceptors [{:enter #(do (println "1" %) %)}
                                   {:enter #(do (println "2" %) %)}]})}
    {:path "/api/endpoint"
     :method :post
     :response (ps {:response-fn (fn [ctx]
-                                  (println "----->" (-> ctx :params :body))
                                   {:status 200
-                                   :body (str "Hello, " (-> ctx :params :body :who))})
+                                   :body (str "Hello, " (-> ctx :body :who))})
                    :interceptors [{:enter #(do (println "1" %) %)}
                                   {:enter #(do (println "2" %) %)}]})}
-   {:path "/hello/:who"
+   {:path "/hello/:who/:times"
     :method :get
+
     :response (ps {:response-fn (fn [ctx]
                                   {:status 200
-                                   :body (str "Hello, " (:who (:params ctx)))})
+                                   :body {:message "hello"
+                                          :who (-> ctx :params :who)
+                                          :times (-> ctx :params :times)}})
                    :interceptors [{:enter #(do (println "1" %) %)}
                                   {:enter #(do (println "2" %) %)}]})}])
 
@@ -79,9 +93,7 @@
     (reset! server nil)))
 
 (defn route-handler [request]
-  (ruuter/route routes (merge request
-                              {:interceptors base-interceptors}
-                              {:a 0 :b 0 :d 0})))
+  (ruuter/route routes (merge request {:interceptors base-interceptors})))
 
 (defn -main [& _args]
   ;; The #' is useful when you want to hot-reload code
@@ -91,7 +103,7 @@
 
 (comment
   (require '[ring.mock.request :as mock])
-  (->> (mock/request :get "/hello/rafa")
+  (->> (mock/request :get "/hello/rafa/3")
        route-handler)
   (->> (-> (mock/request :post "/api/endpoint")
            (mock/json-body {:who "delboni"}))
