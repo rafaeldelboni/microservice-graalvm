@@ -14,9 +14,10 @@
         migratus/migratus {:mvn/version "1.4.4"}
         org.clojars.askonomm/ruuter {:mvn/version "1.2.2"}
         org.postgresql/postgresql {:mvn/version "42.5.0"}
-        org.slf4j/slf4j-api {:mvn/version "2.0.0"}
+        org.slf4j/slf4j-simple {:mvn/version "1.7.32"}
         prismatic/schema {:mvn/version "1.4.0"}
-        prismatic/schema-generators {:mvn/version "0.1.5"}}
+        prismatic/schema-generators {:mvn/version "0.1.5"}
+        com.github.clj-easy/graal-build-time {:mvn/version "0.1.4"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps  {bigsy/pg-embedded-clj {:mvn/version "0.1.0"}
@@ -32,11 +33,12 @@
 
   :migratus {:main-opts ["-m" "parenthesin.migrations"]}
 
-  :uberjar {:replace-deps {com.github.seancorfield/depstar {:mvn/version "2.1.303"}}
-            :exec-fn hf.depstar/uberjar
-            :exec-args {:jar "service.jar"
-                        :aot true
-                        :main-class microservice-graalvm.server}}
+  :uberjar {:deps {io.github.seancorfield/build-clj
+                   {:git/tag "v0.8.3" :git/sha "7ac1f8d"
+                    :deps/root "slim"}}
+            :exec-fn org.corfield.build/uber
+            :exec-args {:main microservice-graalvm.server
+                        :uber-file "target/service.jar"}}
 
   :nrepl {:extra-deps {cider/cider-nrepl {:mvn/version "0.28.5"}}
           :main-opts ["-m" "nrepl.cmdline" "--middleware" "[cider.nrepl/cider-middleware]"]}}}

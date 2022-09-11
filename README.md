@@ -10,10 +10,10 @@ Clojure Microservice Boilerplate: http-kit, java-http-clj, ruuter, interceptor, 
 - [x] Add create before interceptor that coerce/convert request parameters (path & body)
 - [x] Add create after interceptor that coerce/convert response body
 - [x] Do a http request using http-client (parse request/response)
-- [ ] Compile using GraalVM
+- [x] Add PostgreSQL call
 - [ ] Add create after interceptor that validate response body
 - [ ] Add create before interceptor that validate request parameters (path & body)
-- [ ] Compile using GraalVM again
+- [x] Compile using GraalVM
 
 ## Features
 

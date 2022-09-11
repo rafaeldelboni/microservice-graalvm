@@ -4,8 +4,25 @@
             [exoscale.interceptor :as ix]
             [java-http-clj.core :as http]
             [org.httpkit.server :as http-kit]
-            [ruuter.core :as ruuter])
+            [ruuter.core :as ruuter]
+            [next.jdbc :as jdbc]
+            [next.jdbc.connection :as connection]
+            [taoensso.timbre :as timbre])
+  (:import [com.zaxxer.hikari HikariDataSource])
   (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+(defn db-query []
+  (let [db-spec {:dbtype "postgres"
+                 :dbname "postgres"
+                 :username "postgres"
+                 :password "postgres"}]
+    (with-open [^HikariDataSource ds (connection/->pool HikariDataSource db-spec)]
+      (.close (jdbc/get-connection ds))
+      (-> ds
+          (jdbc/execute! ["SELECT * FROM pg_catalog.pg_tables WHERE tablename = 'pg_index';"])
+          first))))
 
 (def parse-request-body
   {:name :parse-request-body
@@ -14,7 +31,9 @@
                         (-> ctx :body slurp (json/decode true))))
        (ix/when #(and (= (-> % :body type) java.io.ByteArrayInputStream)
                       (= (:content-type %) "application/json"))))
-   :error (fn [_ctx err] {:status 500 :body (str err)})})
+   :error (fn [ctx err]
+            (timbre/log :error err ctx)
+            {:status 500 :body (str err)})})
 
 (def parse-response-body
   {:name :parse-response-body
@@ -24,7 +43,9 @@
               (ix/when #(and (= (-> % :body type) clojure.lang.PersistentArrayMap)
                              (or (string/blank? (:content-type %))
                                  (= (:content-type %) "application/json")))))
-   :error (fn [_ctx err] {:status 500 :body (str err)})})
+   :error (fn [ctx err]
+            (timbre/log :error err ctx)
+            {:status 500 :body (str err)})})
 
 (def base-interceptors {:before [parse-request-body]
                         :after [parse-response-body]})
@@ -36,12 +57,16 @@
                 (concat (-> req :interceptors :before)
                         interceptors
                         [{:name :response-fn
-                          :error (fn [_ctx err] {:status 500 :body (str err)})
+                          :error (fn [ctx err]
+                                   (timbre/log :error err ctx)
+                                   {:status 500 :body (str err)})
                           :enter (-> response-fn
                                      (ix/in [])
                                      (ix/out [:response]))}
                          {:name :response-fn-after
-                          :error (fn [_ctx err] {:status 500 :body (str err)})
+                          :error (fn [ctx err]
+                                   (timbre/log :error err ctx)
+                                   {:status 500 :body (str err)})
                           :enter (fn [ctx]
                                    (-> ctx
                                        (merge (:response ctx))
@@ -61,16 +86,19 @@
                                                   :USD
                                                   :rate)]
                                     {:status 200
-                                     :body (str "Hi there!!!! The current price is " price)}))
-                   :interceptors [{:enter #(do (println "1" %) %)}
-                                  {:enter #(do (println "2" %) %)}]})}
+                                     :body (str "Hi there!!!! The current price is "
+                                                price
+                                                " your db schema is "
+                                                (:pg_tables/schemaname (db-query)))}))
+                   :interceptors [{:enter #(do (timbre/log :info "1" %) %)}
+                                  {:enter #(do (timbre/log :info "2" %) %)}]})}
    {:path "/api/endpoint"
     :method :post
     :response (ps {:response-fn (fn [ctx]
                                   {:status 200
                                    :body (str "Hello, " (-> ctx :body :who))})
-                   :interceptors [{:enter #(do (println "1" %) %)}
-                                  {:enter #(do (println "2" %) %)}]})}
+                   :interceptors [{:enter #(do (timbre/log :info "1" %) %)}
+                                  {:enter #(do (timbre/log :info "2" %) %)}]})}
    {:path "/hello/:who/:times"
     :method :get
 
@@ -79,8 +107,8 @@
                                    :body {:message "hello"
                                           :who (-> ctx :params :who)
                                           :times (-> ctx :params :times)}})
-                   :interceptors [{:enter #(do (println "1" %) %)}
-                                  {:enter #(do (println "2" %) %)}]})}])
+                   :interceptors [{:enter #(do (timbre/log :info "1" %) %)}
+                                  {:enter #(do (timbre/log :info "2" %) %)}]})}])
 
 (defonce server (atom nil))
 
