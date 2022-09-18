@@ -39,8 +39,8 @@
 
 ;; Schema Coercer Interceptors
 (defn schema-coercer
-  [schema data]
-  (let [parse (coerce/coercer! schema stc/string-coercion-matcher)
+  [schema matcher data]
+  (let [parse (coerce/coercer! schema matcher)
         coerced (parse data)]
     (s/validate schema coerced)
     coerced))
@@ -48,10 +48,12 @@
 (def coerce-schema
   {:name :coerce-request-schema
    :enter (fn [{:keys [params body parameters] :as ctx}]
-            (let [parsed-path (when-let [path-schema (:path parameters)]
-                                (schema-coercer path-schema params))
+            (let [path-matcher stc/string-coercion-matcher
+                  body-matcher stc/json-coercion-matcher
+                  parsed-path (when-let [path-schema (:path parameters)]
+                                (schema-coercer path-schema path-matcher params))
                   parsed-body (when-let [body-schema (:body parameters)]
-                                (schema-coercer body-schema body))]
+                                (schema-coercer body-schema body-matcher body))]
               (-> ctx
                   (as-> ctx
                         (if parsed-path
@@ -64,7 +66,8 @@
    :leave (fn [{:keys [response responses] :as ctx}]
             (if-let [schema (get responses (:status response))]
               (->> response
-                   (schema-coercer (assoc schema :status s/Int))
+                   (schema-coercer (assoc schema :status s/Int)
+                                   stc/json-coercion-matcher)
                    (merge ctx))
               ctx))
    :error (fn [ctx err]
@@ -83,6 +86,7 @@
                           :leave (fn [ctx] (dissoc ctx
                                                    :exoscale.interceptor/queue
                                                    :exoscale.interceptor/stack
+                                                   :handler-error
                                                    :interceptors
                                                    :parameters
                                                    :responses
