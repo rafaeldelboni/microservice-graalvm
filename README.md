@@ -12,8 +12,8 @@ Clojure Microservice Boilerplate: http-kit, java-http-clj, ruuter, interceptor, 
 - [x] Do a http request using http-client (parse request/response)
 - [x] Add PostgreSQL call
 - [x] Add Aero config read
-- [ ] Create interceptor that validate response body
-- [ ] Create interceptor that validate request parameters (path & body)
+- [x] Create interceptor that validate response body
+- [x] Create interceptor that validate request parameters (path & body)
 - [x] Compile using GraalVM
 
 ## Features

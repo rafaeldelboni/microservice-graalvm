@@ -9,6 +9,9 @@
             [next.jdbc.connection :as connection]
             [org.httpkit.server :as http-kit]
             [ruuter.core :as ruuter]
+            [schema-tools.coerce :as stc]
+            [schema.coerce :as coerce]
+            [schema.core :as s]
             [taoensso.timbre :as timbre])
   (:import [com.zaxxer.hikari HikariDataSource])
   (:gen-class))
@@ -48,66 +51,122 @@
             (timbre/log :error err ctx)
             {:status 500 :body (str err)})})
 
-(def base-interceptors {:before [parse-request-body]
-                        :after [parse-response-body]})
+(defn assoc-some
+  "Associates a key k, with a value v in a map m, if and only if v is not nil."
+  ([m k v]
+   (if (nil? v) m (assoc m k v)))
+  ([m k v & kvs]
+   (reduce (fn [m [k v]] (assoc-some m k v))
+           (assoc-some m k v)
+           (partition 2 kvs))))
+
+(defn schema-coercer
+  [schema data]
+  (let [parse (coerce/coercer! schema stc/string-coercion-matcher)
+        coerced (parse data)]
+    (s/validate schema coerced)
+    coerced))
+
+(def coerce-request-schema
+  {:name :coerce-request-schema
+   :enter (fn [{:keys [params body parameters] :as ctx}]
+            (let [parsed-path (when-let [path-schema (:path parameters)]
+                                (schema-coercer path-schema params))
+                  parsed-body (when-let [body-schema (:body parameters)]
+                                (schema-coercer body-schema body))]
+              (-> ctx
+                  (assoc-some :params parsed-path)
+                  (assoc-some :body parsed-body))))
+   :error (fn [ctx err]
+            (timbre/log :warn err ctx)
+            {:status 400 :body (str err)})})
+
+(def coerce-response-schema
+  {:name :coerce-response-schema
+   :enter (fn [{:keys [response responses] :as ctx}]
+            (if-let [schema (get responses (:status response))]
+              (->> response
+                   (schema-coercer (assoc schema :status s/Int))
+                   (merge ctx))
+              ctx))
+   :error (fn [ctx err]
+            (timbre/log :warn err ctx)
+            {:status 400 :body (str err)})})
+
+(def base-interceptors {:before [parse-request-body coerce-request-schema]
+                        :after [coerce-response-schema parse-response-body]})
 
 (defn ps "Process route response"
-  [{:keys [response-fn interceptors]}]
+  [{:keys [handler interceptors parameters responses]}]
   (fn [req]
     (ix/execute req
-                (concat (-> req :interceptors :before)
+                (concat [{:name :prepare-ctx
+                          :enter (fn [ctx] (assoc ctx
+                                                  :parameters parameters
+                                                  :responses responses))
+                          :leave (fn [ctx] (dissoc ctx
+                                                   :exoscale.interceptor/queue
+                                                   :exoscale.interceptor/stack
+                                                   :interceptors
+                                                   :parameters
+                                                   :responses
+                                                   :response))}]
+                        (-> req :interceptors :before)
                         interceptors
-                        [{:name :response-fn
+                        [{:name :handler-fn
                           :error (fn [ctx err]
                                    (timbre/log :error err ctx)
                                    {:status 500 :body (str err)})
-                          :enter (-> response-fn
+                          :enter (-> handler
                                      (ix/in [])
                                      (ix/out [:response]))}
-                         {:name :response-fn-after
+                         {:name :handler-fn-after
                           :error (fn [ctx err]
                                    (timbre/log :error err ctx)
                                    {:status 500 :body (str err)})
                           :enter (fn [ctx]
-                                   (-> ctx
-                                       (merge (:response ctx))
-                                       (dissoc :response
-                                               :interceptors)))}]
+                                   (-> ctx (merge (:response ctx))))}]
                         (-> req :interceptors :after)))))
 
 (def routes
   [{:path "/"
     :method :get
-    :response (ps {:response-fn (fn [_ctx]
-                                  (let [price (-> {:uri "https://api.coindesk.com/v1/bpi/currentprice.json" :method :get}
-                                                  (http/send {})
-                                                  :body
-                                                  (json/decode true)
-                                                  :bpi
-                                                  :USD
-                                                  :rate)]
-                                    {:status 200
-                                     :body (str "Hi there!!!! The current price is "
-                                                price
-                                                " your db schema is "
-                                                (:pg_tables/schemaname (db-query)))}))
+    :response (ps {:handler (fn [_ctx]
+                              (let [price (-> {:uri "https://api.coindesk.com/v1/bpi/currentprice.json" :method :get}
+                                              (http/send {})
+                                              :body
+                                              (json/decode true)
+                                              :bpi
+                                              :USD
+                                              :rate)]
+                                {:status 200
+                                 :body (str "Hi there!!!! The current price is "
+                                            price
+                                            " your db schema is "
+                                            (:pg_tables/schemaname (db-query)))}))
                    :interceptors [{:enter #(do (timbre/log :info "1" %) %)}
                                   {:enter #(do (timbre/log :info "2" %) %)}]})}
    {:path "/api/endpoint"
     :method :post
-    :response (ps {:response-fn (fn [ctx]
-                                  {:status 200
-                                   :body (str "Hello, " (-> ctx :body :who))})
+    :response (ps {:parameters {:body {:who s/Str}}
+                   :responses {200 {:body s/Str}}
+                   :handler (fn [ctx]
+                              {:status 200
+                               :body (str "Hello, " (-> ctx :body))})
                    :interceptors [{:enter #(do (timbre/log :info "1" %) %)}
                                   {:enter #(do (timbre/log :info "2" %) %)}]})}
    {:path "/hello/:who/:times"
     :method :get
-
-    :response (ps {:response-fn (fn [ctx]
-                                  {:status 200
-                                   :body {:message "hello"
-                                          :who (-> ctx :params :who)
-                                          :times (-> ctx :params :times)}})
+    :response (ps {:parameters {:path {:who s/Str
+                                       :times s/Int}}
+                   :responses {200 {:body {:message s/Str
+                                           :who s/Str
+                                           :times s/Int}}}
+                   :handler (fn [ctx]
+                              {:status 200
+                               :body {:message "hello"
+                                      :who (-> ctx :params :who)
+                                      :times (-> ctx :params :times)}})
                    :interceptors [{:enter #(do (timbre/log :info "1" %) %)}
                                   {:enter #(do (timbre/log :info "2" %) %)}]})}])
 

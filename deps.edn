@@ -11,6 +11,7 @@
         exoscale/interceptor {:mvn/version "0.1.14"}
         http-kit/http-kit {:mvn/version "2.7.0-alpha1"}
         java-http-clj/java-http-clj {:mvn/version "0.4.3"}
+        metosin/schema-tools {:mvn/version "0.12.3"}
         migratus/migratus {:mvn/version "1.4.4"}
         org.clojars.askonomm/ruuter {:mvn/version "1.2.2"}
         org.postgresql/postgresql {:mvn/version "42.5.0"}
