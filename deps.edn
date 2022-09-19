@@ -15,7 +15,7 @@
         migratus/migratus {:mvn/version "1.4.4"}
         org.clojars.askonomm/ruuter {:mvn/version "1.2.2"}
         org.postgresql/postgresql {:mvn/version "42.5.0"}
-        org.slf4j/slf4j-simple {:mvn/version "1.7.32"}
+        org.slf4j/slf4j-simple {:mvn/version "2.0.1"}
         prismatic/schema {:mvn/version "1.4.0"}
         prismatic/schema-generators {:mvn/version "0.1.5"}
         com.github.clj-easy/graal-build-time {:mvn/version "0.1.4"}}
