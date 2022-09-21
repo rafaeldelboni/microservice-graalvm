@@ -72,7 +72,9 @@
               ctx))
    :error (fn [ctx err]
             (timbre/log :warn err ctx)
-            {:status 400 :body (str err)})})
+            {:status 400
+             :content-type "application/json"
+             :body (str (ex-data err))})})
 
 ;; Interstate
 (defn process-route-response
@@ -200,7 +202,7 @@
 ;; Tests
 (comment
   (require '[ring.mock.request :as mock])
-  (->> (mock/request :get "/hello/rafa/3")
+  (->> (mock/request :get "/hello/rafa/23")
        route-handlers)
   (->> (-> (mock/request :post "/api/endpoint")
            (mock/json-body {:who "delboni"}))
