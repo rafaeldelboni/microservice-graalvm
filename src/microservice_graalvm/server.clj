@@ -3,11 +3,13 @@
             [cheshire.core :as json]
             [clojure.java.io :as io]
             [clojure.string :as string]
+            [clojure.walk :as walk]
             [exoscale.interceptor :as ix]
             [java-http-clj.core :as http]
             [next.jdbc :as jdbc]
             [next.jdbc.connection :as connection]
             [org.httpkit.server :as http-kit]
+            [ring.util.codec :as codec]
             [ruuter.core :as ruuter]
             [schema-tools.coerce :as stc]
             [schema.coerce :as coerce]
@@ -18,6 +20,11 @@
 
 (set! *warn-on-reflection* true)
 
+(defn ^:private get-content-type [ctx]
+  (or (get (:headers ctx) "content-type")
+      (get (:headers ctx) "Content-Type")
+      ""))
+
 ;; Parse Json Body Interceptors
 (def parse-body
   {:name :parse-request-body
@@ -25,36 +32,47 @@
    (-> (fn [ctx] (assoc ctx :body
                         (-> ctx :body slurp (json/decode true))))
        (ix/when #(and (= (-> % :body type) java.io.ByteArrayInputStream)
-                      (= (:content-type %) "application/json"))))
+                      (string/includes? (get-content-type %) "application/json"))))
    :leave
    (-> (fn [ctx] (-> ctx
-                     (assoc :content-type "application/json")
+                     (assoc :headers {"content-type" "application/json"})
                      (assoc :body (-> ctx :body (json/encode true)))))
-       (ix/when #(and (= (-> % :body type) clojure.lang.PersistentArrayMap)
-                      (or (string/blank? (:content-type %))
-                          (= (:content-type %) "application/json")))))
+       (ix/when #(and (or (= (-> % :body type) clojure.lang.PersistentArrayMap)
+                          (= (-> % :body type) clojure.lang.PersistentVector))
+                      (or (string/blank? (get-content-type %))
+                          (string/includes? (get-content-type %)
+                                            "application/json")))))
    :error (fn [ctx err]
             (timbre/log :error err ctx)
             {:status 500 :body (str err)})})
 
-;; Schema Coercer Interceptors
-(defn schema-coercer
+(defn ^:private schema-coercer
   [schema matcher data]
   (let [parse (coerce/coercer! schema matcher)
         coerced (parse data)]
     (s/validate schema coerced)
     coerced))
 
+;; Schema Coercer Interceptors
 (def coerce-schema
   {:name :coerce-request-schema
-   :enter (fn [{:keys [params body parameters] :as ctx}]
-            (let [path-matcher stc/string-coercion-matcher
+   :enter (fn [{:keys [params body query-string parameters] :as ctx}]
+            (let [str-matcher stc/string-coercion-matcher
                   body-matcher stc/json-coercion-matcher
+                  parsed-query (when-let [query-schema (:query parameters)]
+                                 (->> query-string
+                                      codec/form-decode
+                                      walk/keywordize-keys
+                                      (schema-coercer query-schema str-matcher)))
                   parsed-path (when-let [path-schema (:path parameters)]
-                                (schema-coercer path-schema path-matcher params))
+                                (schema-coercer path-schema str-matcher params))
                   parsed-body (when-let [body-schema (:body parameters)]
                                 (schema-coercer body-schema body-matcher body))]
               (-> ctx
+                  (as-> ctx
+                        (if parsed-query
+                          (assoc ctx :query parsed-query)
+                          ctx))
                   (as-> ctx
                         (if parsed-path
                           (assoc ctx :params parsed-path)
@@ -73,11 +91,10 @@
    :error (fn [ctx err]
             (timbre/log :warn err ctx)
             {:status 400
-             :content-type "application/json"
              :body (str (ex-data err))})})
 
 ;; Interstate
-(defn process-route-response
+(defn ^:private process-route-response
   [{:keys [handler handler-error interceptors parameters responses]}]
   (fn [req]
     (ix/execute req
@@ -88,23 +105,22 @@
                           :leave (fn [ctx] (dissoc ctx
                                                    :exoscale.interceptor/queue
                                                    :exoscale.interceptor/stack
-                                                   :handler-error
-                                                   :interceptors
-                                                   :parameters
-                                                   :responses
-                                                   :response))}]
+                                                   :responses))}]
                         (or (-> req :interceptors) [])
                         interceptors
                         [{:name :handler-fn
                           :error (or handler-error
                                      (-> req :handler-error)
-                                     (fn [_ err]
+                                     (fn [_ctx err]
                                        {:status 500 :body (str err)}))
                           :enter (-> handler
                                      (ix/in [])
                                      (ix/out [:response]))
                           :leave (fn [ctx]
-                                   (-> ctx (merge (:response ctx))))}]))))
+                                   (-> (select-keys ctx [:exoscale.interceptor/queue
+                                                         :exoscale.interceptor/stack
+                                                         :responses])
+                                       (merge (:response ctx))))}]))))
 
 (defn routes->ruuter [routes]
   (map #(assoc % :response (process-route-response %)) routes))
@@ -202,9 +218,10 @@
 ;; Tests
 (comment
   (require '[ring.mock.request :as mock])
-  (->> (mock/request :get "/hello/rafa/23")
+  (->> (mock/request :get "/hello/rafa/1")
        route-handlers)
   (->> (-> (mock/request :post "/api/endpoint")
+           (merge {:headers {"a" "b"}})
            (mock/json-body {:who "delboni"}))
        route-handlers)
   (->> (mock/request :get "/")
