@@ -237,10 +237,6 @@
         "parameterTypes": []
       },
       {
-        "name": "getScheduledExecutorService",
-        "parameterTypes": []
-      },
-      {
         "name": "getThreadFactory",
         "parameterTypes": []
       },
@@ -265,15 +261,7 @@
         "parameterTypes": []
       },
       {
-        "name": "isInitializationFailFast",
-        "parameterTypes": []
-      },
-      {
         "name": "isIsolateInternalQueries",
-        "parameterTypes": []
-      },
-      {
-        "name": "isJdbc4ConnectionTest",
         "parameterTypes": []
       },
       {
@@ -371,19 +359,7 @@
         ]
       },
       {
-        "name": "setInitializationFailFast",
-        "parameterTypes": [
-          "boolean"
-        ]
-      },
-      {
         "name": "setIsolateInternalQueries",
-        "parameterTypes": [
-          "boolean"
-        ]
-      },
-      {
-        "name": "setJdbc4ConnectionTest",
         "parameterTypes": [
           "boolean"
         ]
@@ -455,12 +431,6 @@
         ]
       },
       {
-        "name": "setScheduledExecutorService",
-        "parameterTypes": [
-          "java.util.concurrent.ScheduledThreadPoolExecutor"
-        ]
-      },
-      {
         "name": "setThreadFactory",
         "parameterTypes": [
           "java.util.concurrent.ThreadFactory"
@@ -492,11 +462,5 @@
     },
     "name": "java.sql.Connection",
     "fields": []
-  },
-  {
-    "condition": {
-      "typeReachable": "com.zaxxer.hikari.util.Sequence$Factory"
-    },
-    "name": "java.util.concurrent.atomic.LongAdder"
   }
 ]

@@ -31,7 +31,9 @@
    :enter
    (-> (fn [ctx] (assoc ctx
                         :body (-> ctx :body slurp (json/decode true))))
-       (ix/when #(and (= (-> % :body type) java.io.ByteArrayInputStream)
+       (ix/when #(and (when-let [body-type (-> % :body type)] 
+                        (or (= body-type java.io.ByteArrayInputStream)
+                            (= body-type org.httpkit.BytesInputStream)))
                       (string/includes? (get-content-type %) "application/json"))))
    :leave
    (-> (fn [ctx] (-> ctx
