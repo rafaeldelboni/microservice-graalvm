@@ -29,8 +29,8 @@
 (def parse-body
   {:name :parse-request-body
    :enter
-   (-> (fn [ctx] (assoc ctx :body
-                        (-> ctx :body slurp (json/decode true))))
+   (-> (fn [ctx] (assoc ctx
+                        :body (-> ctx :body slurp (json/decode true))))
        (ix/when #(and (= (-> % :body type) java.io.ByteArrayInputStream)
                       (string/includes? (get-content-type %) "application/json"))))
    :leave
@@ -43,7 +43,19 @@
                           (string/includes? (get-content-type %)
                                             "application/json")))))
    :error (fn [ctx err]
-            (timbre/log :error err ctx)
+            (timbre/log :error :parse-request-body err ctx)
+            {:status 500 :body (str err)})})
+
+(def parse-query
+  {:name :parse-request-query
+   :enter (-> (fn [ctx] (assoc ctx
+                               :query (->> ctx
+                                           :query-string
+                                           codec/form-decode
+                                           walk/keywordize-keys)))
+              (ix/when #(not (-> % :query-string nil?))))
+   :error (fn [ctx err]
+            (timbre/log :error :parse-request-query err ctx)
             {:status 500 :body (str err)})})
 
 (defn ^:private schema-coercer
@@ -56,31 +68,19 @@
 ;; Schema Coercer Interceptors
 (def coerce-schema
   {:name :coerce-request-schema
-   :enter (fn [{:keys [params body query-string parameters] :as ctx}]
+   :enter (fn [{:keys [params body query parameters] :as ctx}]
             (let [str-matcher stc/string-coercion-matcher
                   body-matcher stc/json-coercion-matcher
                   parsed-query (when-let [query-schema (:query parameters)]
-                                 (->> query-string
-                                      codec/form-decode
-                                      walk/keywordize-keys
-                                      (schema-coercer query-schema str-matcher)))
+                                 (schema-coercer query-schema str-matcher query))
                   parsed-path (when-let [path-schema (:path parameters)]
                                 (schema-coercer path-schema str-matcher params))
                   parsed-body (when-let [body-schema (:body parameters)]
                                 (schema-coercer body-schema body-matcher body))]
-              (-> ctx
-                  (as-> ctx
-                        (if parsed-query
-                          (assoc ctx :query parsed-query)
-                          ctx))
-                  (as-> ctx
-                        (if parsed-path
-                          (assoc ctx :params parsed-path)
-                          ctx))
-                  (as-> ctx
-                        (if parsed-body
-                          (assoc ctx :body parsed-body)
-                          ctx)))))
+              (cond-> ctx
+                (not-empty parsed-query) (assoc :query parsed-query)
+                (not-empty parsed-path) (assoc :params parsed-path)
+                (not-empty parsed-body) (assoc :body parsed-body))))
    :leave (fn [{:keys [response responses] :as ctx}]
             (if-let [schema (get responses (:status response))]
               (->> response
@@ -89,7 +89,7 @@
                    (merge ctx))
               ctx))
    :error (fn [ctx err]
-            (timbre/log :warn err ctx)
+            (timbre/log :warn :coerce-request-schema err ctx)
             {:status 400
              :body (str (ex-data err))})})
 
@@ -190,7 +190,7 @@
     :interceptors [{:enter #(do (timbre/log :info "1" %) %)}
                    {:enter #(do (timbre/log :info "2" %) %)}]}])
 
-(def base-interceptors [parse-body coerce-schema])
+(def base-interceptors [parse-body parse-query coerce-schema])
 
 (def route-handlers
   (routes->handler routes {:interceptors base-interceptors
