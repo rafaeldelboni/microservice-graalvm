@@ -21,7 +21,7 @@
         com.github.clj-easy/graal-build-time {:mvn/version "0.1.4"}}
  :aliases
  {:test {:extra-paths ["test"]
-         :extra-deps  {bigsy/pg-embedded-clj {:mvn/version "0.1.0"}
+         :extra-deps  {org.clojars.bigsy/pg-embedded-clj {:mvn/version "1.0.0"}
                        lambdaisland/kaocha {:mvn/version "1.69.1069"}
                        lambdaisland/kaocha-cloverage {:mvn/version "1.0.75"}
                        nubank/matcher-combinators {:mvn/version "3.5.1"}
